@@ -4,17 +4,13 @@ import shutil
 import numpy as np
 import cv2
 import xml.etree.ElementTree as ET
+import argparse
 from synthesize import distort_logo, overlay_logo
 
 '''
 Distort a logo in multiple ways on overlay it onto the center of a VOC db
 '''
 
-logo_class = 'milka'
-ups_path = 'milka1.png'
-in_set_root = '/home/etoropov/datasets/FlickrLogos-v2-Pascal'
-set_name = 'val.txt'
-out_set_root = '/home/etoropov/datasets/FlickrLogos-milka'
 
 do_write = True
 do_show = False
@@ -35,28 +31,36 @@ def _reinit_dataset (set_root):
 
 if __name__ == "__main__":
 
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--logo_class', default='ups', help='name to put into VOC imdb')
+  parser.add_argument('--logo_path', default='logo.png', help='path to the canonical image')
+  parser.add_argument('--in_imdb_root', required=True, help='root of input VOC imdb')
+  parser.add_argument('--out_imdb_root', required=True, help='root of output VOC imdb')
+  parser.add_argument('--set_name', required=True, help='set name, e.g. "train", "test"')
+  args = parser.parse_args()
+
   # load logo
-  logo = cv2.imread(ups_path, cv2.IMREAD_UNCHANGED)
+  logo = cv2.imread(args.logo_path, cv2.IMREAD_UNCHANGED)
   assert logo is not None
 
   # load val. ImageSet
-  with open(op.join(in_set_root, 'ImageSets', 'Main', set_name)) as f:
+  with open(op.join(argparse.in_imdb_root, 'ImageSets', 'Main', args.set_name)) as f:
     imids = f.read().splitlines()
 
   # recreate output dataset
   if do_write:
-    _reinit_dataset (out_set_root)
+    _reinit_dataset (args.out_set_root)
 
   for imid in imids[:]:
 
-    in_jpg_path = op.join(in_set_root, 'JPEGImages', '%s.jpg' % imid)
+    in_jpg_path = op.join(argparse.in_imdb_root, 'JPEGImages', '%s.jpg' % imid)
     background = cv2.imread(in_jpg_path)
     if len(background.shape) == 1:   # grayscale to color 
       background = cv2.cvtColor(background, cv2.COLOR_GRAY2RGB)
     elif background.shape[2] == 4:   # strip alpha channel
       background = background[:,:,:3]
 
-    in_xml_path = op.join(in_set_root, 'Annotations', '%s.xml' % imid)
+    in_xml_path = op.join(argparse.in_imdb_root, 'Annotations', '%s.xml' % imid)
     xml_tree = ET.parse(in_xml_path)
 
     # if logo is already in the image, skip it
@@ -66,7 +70,7 @@ if __name__ == "__main__":
         cls = obj.find('name').text.lower().strip()
         if cls == logo_class: return True
       return False
-    if skip_image(xml_tree, logo_class): continue
+    if skip_image(xml_tree, args.logo_class): continue
 
     try:
       blended, roi = overlay_logo(background, distort_logo(logo))
@@ -76,13 +80,13 @@ if __name__ == "__main__":
 
     if do_write:
       ## save image
-      out_jpg_path = op.join(out_set_root, 'JPEGImages', '%s.jpg' % imid)
+      out_jpg_path = op.join(args.out_set_root, 'JPEGImages', '%s.jpg' % imid)
       shutil.copyfile (in_jpg_path, out_jpg_path)
 
       ## save annotation
       # rename imageset
       root = xml_tree.getroot()
-      root.find('folder').text = 'flickrlogo1_%s' % logo_class
+      root.find('folder').text = 'flickrlogo1_%s' % args.logo_class
       # remove all existing objects
       for obj in root.findall('object'):
         root.remove(obj)
@@ -102,11 +106,11 @@ if __name__ == "__main__":
         grandchild.text = str(roi[3])
       add_object(root, roi, logo_class)
       # write to file
-      out_xml_path = op.join(out_set_root, 'Annotations', '%s.xml' % imid)
+      out_xml_path = op.join(args.out_set_root, 'Annotations', '%s.xml' % imid)
       xml_tree.write(out_xml_path)
 
       ## save image index to imageset (yes, open the file again for every image)
-      out_set_path = op.join(out_set_root, 'ImageSets', 'Main', set_name)
+      out_set_path = op.join(args.out_set_root, 'ImageSets', 'Main', args.set_name)
       with open(out_set_path, 'a') as f:
         f.write('%s\n' % imid)
 
@@ -125,6 +129,6 @@ if __name__ == "__main__":
       if key == 27: sys.exit()  # stop on Esc key
 
   if do_write:
-    with open(op.join(out_set_root, 'ImageSets', 'Main', set_name)) as f:
+    with open(op.join(args.out_set_root, 'ImageSets', 'Main', args.set_name)) as f:
       print 'wrote %d images out of %d original' % (len(f.readlines()), len(imids))
 
