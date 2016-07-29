@@ -16,7 +16,7 @@ do_write = True
 do_show = False
 
 
-def _reinit_dataset (set_root):
+def _reinit_dataset (set_root, set_name):
   ''' remove if exists and recreate VOC folder structure '''
   #if op.exists(set_root): shutil.rmtree(set_root)
   if not op.exists(op.join(set_root, 'ImageSets', 'Main')):
@@ -25,42 +25,56 @@ def _reinit_dataset (set_root):
     os.makedirs(op.join(set_root, 'Annotations'))
   if not op.exists(op.join(set_root, 'JPEGImages')):
     os.makedirs(op.join(set_root, 'JPEGImages'))
-  if op.exists(op.join(out_set_root, 'ImageSets', 'Main', set_name)):
-    shutil.delete(op.join(out_set_root, 'ImageSets', 'Main', set_name))
+  if op.exists(op.join(set_root, 'ImageSets', 'Main', set_name)):
+    os.remove(op.join(set_root, 'ImageSets', 'Main', set_name))
 
 
 if __name__ == "__main__":
 
   parser = argparse.ArgumentParser()
   parser.add_argument('--logo_class', default='ups', help='name to put into VOC imdb')
-  parser.add_argument('--logo_path', default='logo.png', help='path to the canonical image')
+  #parser.add_argument('--logo_path', default='logo.png', help='path to the canonical image')
   parser.add_argument('--in_imdb_root', required=True, help='root of input VOC imdb')
   parser.add_argument('--out_imdb_root', required=True, help='root of output VOC imdb')
   parser.add_argument('--set_name', required=True, help='set name, e.g. "train", "test"')
+  parser.add_argument('--N', required=False, type=int, 
+                      help='if given, use that number of images from imdb (debugging)')
   args = parser.parse_args()
 
-  # load logo
-  logo = cv2.imread(args.logo_path, cv2.IMREAD_UNCHANGED)
-  assert logo is not None
+  # load logo image set
+  with open('data/milka.txt') as f:
+      imagefiles = f.read().splitlines()
+  logos = []
+  for imagefile in imagefiles:
+      assert op.exists(op.join('data', imagefile)), op.join('data', imagefile)
+      logo = cv2.imread(op.join('data', imagefile), cv2.IMREAD_UNCHANGED)
+      assert logo is not None, op.join('data', imagefile)
+      assert len(logo.shape) == 3 and logo.shape[2] == 4
+      logos.append(logo)
 
   # load val. ImageSet
-  with open(op.join(argparse.in_imdb_root, 'ImageSets', 'Main', args.set_name)) as f:
+  with open(op.join(args.in_imdb_root, 'ImageSets', 'Main', args.set_name)) as f:
     imids = f.read().splitlines()
 
   # recreate output dataset
   if do_write:
-    _reinit_dataset (args.out_set_root)
+    _reinit_dataset (args.out_imdb_root, args.set_name)
 
-  for imid in imids[:]:
+  if args.N is not None: imids = imids[:args.N]
+  for imid in imids:
 
-    in_jpg_path = op.join(argparse.in_imdb_root, 'JPEGImages', '%s.jpg' % imid)
+    # pick a random logo from the set
+    logo = logos[np.random.randint(low=0, high=len(logos))]
+    print logo.shape
+
+    in_jpg_path = op.join(args.in_imdb_root, 'JPEGImages', '%s.jpg' % imid)
     background = cv2.imread(in_jpg_path)
     if len(background.shape) == 1:   # grayscale to color 
       background = cv2.cvtColor(background, cv2.COLOR_GRAY2RGB)
     elif background.shape[2] == 4:   # strip alpha channel
       background = background[:,:,:3]
 
-    in_xml_path = op.join(argparse.in_imdb_root, 'Annotations', '%s.xml' % imid)
+    in_xml_path = op.join(args.in_imdb_root, 'Annotations', '%s.xml' % imid)
     xml_tree = ET.parse(in_xml_path)
 
     # if logo is already in the image, skip it
@@ -70,7 +84,9 @@ if __name__ == "__main__":
         cls = obj.find('name').text.lower().strip()
         if cls == logo_class: return True
       return False
-    if skip_image(xml_tree, args.logo_class): continue
+    if skip_image(xml_tree, args.logo_class):
+      print 'skipping image which already has objects of the same class'
+      continue
 
     try:
       blended, roi = overlay_logo(background, distort_logo(logo))
@@ -80,7 +96,7 @@ if __name__ == "__main__":
 
     if do_write:
       ## save image
-      out_jpg_path = op.join(args.out_set_root, 'JPEGImages', '%s.jpg' % imid)
+      out_jpg_path = op.join(args.out_imdb_root, 'JPEGImages', '%s.jpg' % imid)
       shutil.copyfile (in_jpg_path, out_jpg_path)
 
       ## save annotation
@@ -104,13 +120,13 @@ if __name__ == "__main__":
         grandchild.text = str(roi[2])
         grandchild = ET.SubElement(child, 'ymax')
         grandchild.text = str(roi[3])
-      add_object(root, roi, logo_class)
+      add_object(root, roi, args.logo_class)
       # write to file
-      out_xml_path = op.join(args.out_set_root, 'Annotations', '%s.xml' % imid)
+      out_xml_path = op.join(args.out_imdb_root, 'Annotations', '%s.xml' % imid)
       xml_tree.write(out_xml_path)
 
       ## save image index to imageset (yes, open the file again for every image)
-      out_set_path = op.join(args.out_set_root, 'ImageSets', 'Main', args.set_name)
+      out_set_path = op.join(args.out_imdb_root, 'ImageSets', 'Main', args.set_name)
       with open(out_set_path, 'a') as f:
         f.write('%s\n' % imid)
 
@@ -129,6 +145,6 @@ if __name__ == "__main__":
       if key == 27: sys.exit()  # stop on Esc key
 
   if do_write:
-    with open(op.join(args.out_set_root, 'ImageSets', 'Main', args.set_name)) as f:
+    with open(op.join(args.out_imdb_root, 'ImageSets', 'Main', args.set_name)) as f:
       print 'wrote %d images out of %d original' % (len(f.readlines()), len(imids))
 
