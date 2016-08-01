@@ -32,8 +32,8 @@ def _reinit_dataset (set_root, set_name):
 if __name__ == "__main__":
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('--logo_class', default='ups', help='name to put into VOC imdb')
-  #parser.add_argument('--logo_path', default='logo.png', help='path to the canonical image')
+  parser.add_argument('--logo_class', required=True, help='name to put into VOC imdb, e.g. "ups"')
+  parser.add_argument('--logo_path', required=True, help='path to the canonical image. e.g. "logo.png"')
   parser.add_argument('--in_imdb_root', required=True, help='root of input VOC imdb')
   parser.add_argument('--out_imdb_root', required=True, help='root of output VOC imdb')
   parser.add_argument('--set_name', required=True, help='set name, e.g. "train", "test"')
@@ -42,13 +42,15 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   # load logo image set
-  with open('data/milka.txt') as f:
-      imagefiles = f.read().splitlines()
+#  with open('data/milka.txt') as f:
+#      imagefiles = f.read().splitlines()
   logos = []
-  for imagefile in imagefiles:
-      assert op.exists(op.join('data', imagefile)), op.join('data', imagefile)
-      logo = cv2.imread(op.join('data', imagefile), cv2.IMREAD_UNCHANGED)
-      assert logo is not None, op.join('data', imagefile)
+  for imagefile in [args.logo_path]: #imagefiles:
+      #assert op.exists(op.join('data', imagefile)), op.join('data', imagefile)
+      #logo = cv2.imread(op.join('data', imagefile), cv2.IMREAD_UNCHANGED)
+      assert op.exists(imagefile), imagefile
+      logo = cv2.imread(imagefile, cv2.IMREAD_UNCHANGED)
+      assert logo is not None, imagefile
       assert len(logo.shape) == 3 and logo.shape[2] == 4
       logos.append(logo)
 
@@ -65,7 +67,7 @@ if __name__ == "__main__":
 
     # pick a random logo from the set
     logo = logos[np.random.randint(low=0, high=len(logos))]
-    print logo.shape
+    #print logo.shape
 
     in_jpg_path = op.join(args.in_imdb_root, 'JPEGImages', '%s.jpg' % imid)
     background = cv2.imread(in_jpg_path)
@@ -97,7 +99,7 @@ if __name__ == "__main__":
     if do_write:
       ## save image
       out_jpg_path = op.join(args.out_imdb_root, 'JPEGImages', '%s.jpg' % imid)
-      shutil.copyfile (in_jpg_path, out_jpg_path)
+      cv2.imwrite(out_jpg_path, blended)
 
       ## save annotation
       # rename imageset
