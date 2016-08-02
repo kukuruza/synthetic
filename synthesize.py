@@ -9,7 +9,7 @@ Image (e.g.) logo is distorted in different ways, then overlayed on background
 ## coefficients to regulate geometric and color distortions
 
 # image is transformed as shear -> rotation -> shear
-COEF_SHEAR = 0.5
+COEF_SHEAR = 0.3
 COEF_ROT = 0.3
 
 # hue is shifted, intensity histogram is pushed either to blacks or whites

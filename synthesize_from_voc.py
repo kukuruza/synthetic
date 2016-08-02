@@ -32,22 +32,23 @@ def _reinit_dataset (set_root, set_name):
 if __name__ == "__main__":
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('--logo_class', required=True, help='name to put into VOC imdb, e.g. "ups"')
-  parser.add_argument('--logo_path', required=True, help='path to the canonical image. e.g. "logo.png"')
-  parser.add_argument('--in_imdb_root', required=True, help='root of input VOC imdb')
-  parser.add_argument('--out_imdb_root', required=True, help='root of output VOC imdb')
-  parser.add_argument('--set_name', required=True, help='set name, e.g. "train", "test"')
-  parser.add_argument('--N', required=False, type=int, 
+  parser.add_argument('--logo_class', required=True, 
+                      help='class name for VOC imdb annotations, e.g. "ups"')
+  parser.add_argument('-l', '--logo_path', required=True, action='append', 
+                      help='path to the canonical logo(s). e.g. "logo.png". '
+                           'Can use this argument multiple times.')
+  parser.add_argument('--in_imdb_root', required=True, 
+                      help='root of input VOC imdb')
+  parser.add_argument('--out_imdb_root', required=True, 
+                      help='root of output VOC imdb')
+  parser.add_argument('--set_name', required=True, 
+                      help='set name, e.g. "train", "test"')
+  parser.add_argument('-N', required=False, type=int, 
                       help='if given, use that number of images from imdb (debugging)')
   args = parser.parse_args()
 
-  # load logo image set
-#  with open('data/milka.txt') as f:
-#      imagefiles = f.read().splitlines()
   logos = []
-  for imagefile in [args.logo_path]: #imagefiles:
-      #assert op.exists(op.join('data', imagefile)), op.join('data', imagefile)
-      #logo = cv2.imread(op.join('data', imagefile), cv2.IMREAD_UNCHANGED)
+  for imagefile in args.logo_path:
       assert op.exists(imagefile), imagefile
       logo = cv2.imread(imagefile, cv2.IMREAD_UNCHANGED)
       assert logo is not None, imagefile
@@ -67,7 +68,7 @@ if __name__ == "__main__":
 
     # pick a random logo from the set
     logo = logos[np.random.randint(low=0, high=len(logos))]
-    #print logo.shape
+    print logo.shape
 
     in_jpg_path = op.join(args.in_imdb_root, 'JPEGImages', '%s.jpg' % imid)
     background = cv2.imread(in_jpg_path)
