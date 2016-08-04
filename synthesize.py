@@ -9,16 +9,15 @@ Image (e.g.) logo is distorted in different ways, then overlayed on background
 ## coefficients to regulate geometric and color distortions
 
 # image is transformed as shear -> rotation -> shear
-COEF_SHEAR = 0.3
+COEF_SHEAR = 0.6
 COEF_ROT = 0.3
 
 # hue is shifted, intensity histogram is pushed either to blacks or whites
 COEF_HUE = 10.0
 COEF_INTENSITY = 3.
 
-# image size is SIZE_BASE +- scale distortions
-SC_MAX = 1.0
-SIZE_BASE = 50
+# scale decrease
+SC_COEF = 1.0
 
 # image is first downsized to SIZE_TEMP for speed of distortions
 SIZE_TEMP = 100
@@ -116,29 +115,39 @@ def color_distort (image0):
 
 
 
-def distort_logo (logo0):
+def distort_logo (logo0, dst_shape):
   ''' apply all kind of distortions to logo0 '''
 
   # first downscale for faster computations (it's better to have a square)
   logo = cv2.resize(logo0, (SIZE_TEMP,SIZE_TEMP))
   logo = geometric_distort (logo)
   logo = color_distort (logo)
-  # random scaling
-  scale = exp((np.random.rand()-0.5) * SC_MAX)
-  logo = cv2.resize(logo, None, None, scale, scale)
+  #print dst_shape
+  logo = cv2.resize(logo, (dst_shape[1],dst_shape[0]))
   return logo
 
 
-def overlay_logo (background, logo):
-  ''' Overlay semi-transparent logo onto image center '''
+def overlay_logo (background, logo, roi):
+  ''' Overlay semi-transparent logo onto image center 
+      roi is in format [y1,x1,y2,x2]
+  '''
+
+  # decrease scale randomly
+  center_x = (roi[3]+roi[1]) / 2
+  center_y = (roi[2]+roi[0]) / 2
+  scale = exp(-np.random.uniform(high=SC_COEF))
+  width  = (roi[3]-roi[1]) * scale
+  height = (roi[2]-roi[0]) * scale
+  roi = [center_y - height/2, center_x - width/2,
+         center_y + height/2, center_x + width/2]
+  roi = [int(x) for x in roi]
+
+  logo = distort_logo(logo, (roi[2]-roi[0], roi[3]-roi[1]))
 
   # crop background center, same size as logo
   if logo.shape[0] > background.shape[0] or logo.shape[1] > background.shape[1]:
     raise Exception('logo too large')
-  y1 = (background.shape[0] - logo.shape[0]) / 2
-  x1 = (background.shape[1] - logo.shape[1]) / 2
-  h,w = logo.shape[:2]
-  crop = background[y1:y1+h, x1:x1+w, :]
+  crop = background[roi[0]:roi[2], roi[1]:roi[3], :]
 
   def blend (background, logo):
     ''' opencv lacks functionality to put blend images with alpha-channel
@@ -159,9 +168,9 @@ def overlay_logo (background, logo):
 
   crop = blend(crop, logo)
   blended = background.copy()
-  blended[y1:y1+h, x1:x1+w, :] = crop
+  blended[roi[0]:roi[2], roi[1]:roi[3], :] = crop
 
-  return blended, [x1, y1, x1+w, y1+h]
+  return blended
 
 
 
@@ -179,6 +188,14 @@ if __name__ == "__main__":
     'has to have FOUR channels (with alpha). Now shape is %s' % str(logo.shape)
 
   for i in range(20):
-    blended, _ = overlay_logo(background, distort_logo(logo))
+
+    # random scaling
+    size_orig = 100
+    y1 = int((background.shape[0] - size_orig) / 2)
+    x1 = int((background.shape[1] - size_orig) / 2)
+    y2 = int((background.shape[0] + size_orig) / 2)
+    x2 = int((background.shape[1] + size_orig) / 2)
+
+    blended = overlay_logo(background, logo, roi=[y1,x1,y2,x2])
     cv2.imshow('test', blended)
     cv2.waitKey(-1)
