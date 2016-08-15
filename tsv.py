@@ -6,7 +6,7 @@ import base64
 import argparse
 
 
-def read_line (tsv_path, image_col, label_col = None, num = 10000000000):
+def read_line (tsv_path, image_col, num = 10000000000):
 
   i = 0
   assert op.exists(tsv_path), tsv_path
@@ -16,33 +16,49 @@ def read_line (tsv_path, image_col, label_col = None, num = 10000000000):
       # find image and label strings
       lineparts = line.split('\t')
       imagestring = lineparts[image_col]
-      label = lineparts[label_col] if label_col is not None else None
 
       # decode image string
       jpgbytestring = base64.b64decode(imagestring)
       nparr = np.fromstring(jpgbytestring, np.uint8)
-      image = cv2.imdecode(nparr, cv2.CV_LOAD_IMAGE_COLOR)
+      image = cv2.imdecode(nparr, -1)
 
       if i >= num: return
       i += 1
 
-      yield image, label
+      yield image, lineparts
 
+
+def encode_image (image, ext='.png'):
+  # end image string
+  retval, nparr = cv2.imencode(ext, image)
+  jpgbytestring = nparr.tostring()
+  imagestring = base64.b64encode(jpgbytestring)
+  return imagestring
 
 
 if __name__ == "__main__":
 
   ''' Tsv viewer '''
 
-  path = 'data/Pokemon151.tsv'
+  path_in = 'data/Pokemon151.tsv'
+  path_out = '/dev/null'
   image_col = 2
-  label_col = 0
   target_size = 1000
   
-  for image, label in read_line(path, image_col, label_col):
-    f = float(target_size) / max(image.shape[0], image.shape[1])
-    image = cv2.resize(image, None, None, f, f)
-    cv2.imshow('test', image)
-    key = cv2.waitKey(-1)
-    if key == 27: sys.exit()  # if Esc is pressed
+  with open(path_out, 'w') as f_out:
+    for image, lineparts in read_line(path_in, image_col):
+
+      # write
+      imagestr = encode_image(image)
+      lineparts[image_col] = imagestr
+      f_out.write('%s\n' % '\t'.join(lineparts))
+
+      # display
+      print 'image shape:', image.shape
+      f = float(target_size) / max(image.shape[0], image.shape[1])
+      image = cv2.resize(image, None, None, f, f)
+      cv2.imshow('test', image)
+      key = cv2.waitKey(-1)
+      if key == 27: break  # if Esc is pressed
     
+
